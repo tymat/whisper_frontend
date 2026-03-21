@@ -1,0 +1,9 @@
+venv/
+models/
+uploads/
+__pycache__/
+*.pyc
+.env
+.claude/
+openspec/
+CLAUDE.md

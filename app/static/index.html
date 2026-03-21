@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisper Local STT</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 700px;
+            width: 100%;
+        }
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            color: #fff;
+        }
+        .card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.2rem;
+        }
+        .card h2 {
+            font-size: 1rem;
+            color: #a0a0c0;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        label {
+            display: block;
+            font-size: 0.85rem;
+            color: #a0a0c0;
+            margin-bottom: 0.3rem;
+        }
+        select, input[type="file"] {
+            width: 100%;
+            padding: 0.6rem;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            background: #0f3460;
+            color: #e0e0e0;
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+        }
+        select:focus { outline: 2px solid #e94560; }
+        .file-drop {
+            border: 2px dashed #2a2a4a;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            margin-bottom: 1rem;
+        }
+        .file-drop:hover, .file-drop.dragover {
+            border-color: #e94560;
+        }
+        .file-drop .filename {
+            color: #e94560;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .toggle-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #e94560;
+        }
+        .config-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        button {
+            width: 100%;
+            padding: 0.8rem;
+            border: none;
+            border-radius: 8px;
+            background: #e94560;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover:not(:disabled) { opacity: 0.85; }
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .output {
+            min-height: 120px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: #e0e0e0;
+        }
+        .output.empty { color: #555; font-style: italic; }
+        .download-buttons {
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+        }
+        .download-buttons a {
+            display: inline-block;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            background: #0f3460;
+            border: 1px solid #2a2a4a;
+            color: #e0e0e0;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .download-buttons a:hover {
+            background: #e94560;
+            border-color: #e94560;
+        }
+        .download-buttons a .fmt-label {
+            text-transform: uppercase;
+        }
+        .error { color: #ff6b6b; }
+        .spinner {
+            display: none;
+            text-align: center;
+            padding: 1rem;
+        }
+        .spinner.active { display: block; }
+        .spinner .dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #e94560;
+            margin: 0 4px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .spinner .dot:nth-child(1) { animation-delay: -0.32s; }
+        .spinner .dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        .spinner-text {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: #a0a0c0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Whisper Local STT</h1>
+
+        <div class="card">
+            <h2>Audio File</h2>
+            <div class="file-drop" id="fileDrop">
+                <div>Click or drag an audio/video file here</div>
+                <div class="filename" id="fileName"></div>
+                <input type="file" id="fileInput" hidden>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Configuration</h2>
+            <div class="config-row">
+                <div>
+                    <label for="modelSelect">Model Size</label>
+                    <select id="modelSelect"></select>
+                </div>
+                <div>
+                    <label for="langSelect">Language</label>
+                    <select id="langSelect"></select>
+                </div>
+            </div>
+        </div>
+
+        <button id="transcribeBtn" disabled>Transcribe</button>
+
+        <div class="spinner" id="spinner">
+            <div>
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+            <div class="spinner-text">Transcribing...</div>
+        </div>
+
+        <div class="card" id="outputCard" style="display:none; margin-top:1.2rem;">
+            <h2>Download Subtitles</h2>
+            <div class="download-buttons" id="downloadButtons"></div>
+            <div class="preview-toggle" id="previewToggle" style="margin-top:1rem;">
+                <span style="font-size:0.85rem; color:#a0a0c0; cursor:pointer; text-decoration:underline;" onclick="togglePreview()">Show preview</span>
+            </div>
+            <div class="output" id="output" style="display:none; margin-top:0.8rem;"></div>
+        </div>
+
+        <div class="card" id="errorCard" style="display:none; margin-top:1.2rem;">
+            <h2>Error</h2>
+            <div class="output error" id="errorOutput"></div>
+        </div>
+    </div>
+
+    <script>
+        const fileDrop = document.getElementById('fileDrop');
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const modelSelect = document.getElementById('modelSelect');
+        const langSelect = document.getElementById('langSelect');
+        const transcribeBtn = document.getElementById('transcribeBtn');
+        const spinner = document.getElementById('spinner');
+        const outputCard = document.getElementById('outputCard');
+        const downloadButtons = document.getElementById('downloadButtons');
+        const output = document.getElementById('output');
+        const errorCard = document.getElementById('errorCard');
+        const errorOutput = document.getElementById('errorOutput');
+
+        let selectedFile = null;
+        let exportFormats = [];
+
+        // Load config
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                const cfg = await res.json();
+                exportFormats = cfg.export_formats || [];
+                cfg.models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m.charAt(0).toUpperCase() + m.slice(1);
+                    if (m === cfg.default_model) opt.selected = true;
+                    modelSelect.appendChild(opt);
+                });
+                cfg.languages.forEach(l => {
+                    const opt = document.createElement('option');
+                    opt.value = l;
+                    opt.textContent = l === 'auto' ? 'Auto-detect' : l.toUpperCase();
+                    if (l === cfg.default_language) opt.selected = true;
+                    langSelect.appendChild(opt);
+                });
+            } catch (e) {
+                showError('Failed to load configuration: ' + e.message);
+            }
+        }
+        loadConfig();
+
+        // File selection
+        fileDrop.addEventListener('click', () => fileInput.click());
+        fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+        fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('dragover'));
+        fileDrop.addEventListener('drop', e => {
+            e.preventDefault();
+            fileDrop.classList.remove('dragover');
+            if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) setFile(fileInput.files[0]);
+        });
+
+        function setFile(file) {
+            selectedFile = file;
+            fileName.textContent = file.name;
+            transcribeBtn.disabled = false;
+        }
+
+        // Transcribe
+        transcribeBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            transcribeBtn.disabled = true;
+            spinner.classList.add('active');
+            outputCard.style.display = 'none';
+            errorCard.style.display = 'none';
+            output.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('model', modelSelect.value);
+            formData.append('language', langSelect.value);
+
+            try {
+                const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Transcription request failed');
+                }
+                const { job_id } = await res.json();
+                pollStatus(job_id);
+            } catch (e) {
+                showError(e.message);
+                resetUI();
+            }
+        });
+
+        async function pollStatus(jobId) {
+            try {
+                const res = await fetch(`/api/status/${jobId}`);
+                const data = await res.json();
+
+                if (data.status === 'complete') {
+                    showResult(jobId, data.result);
+                    resetUI();
+                } else if (data.status === 'failed') {
+                    showError(data.error || 'Transcription failed');
+                    resetUI();
+                } else {
+                    setTimeout(() => pollStatus(jobId), 1000);
+                }
+            } catch (e) {
+                showError('Lost connection: ' + e.message);
+                resetUI();
+            }
+        }
+
+        function showResult(jobId, result) {
+            outputCard.style.display = 'block';
+            errorCard.style.display = 'none';
+
+            // Build download buttons
+            downloadButtons.innerHTML = '';
+            const fmtDescriptions = { srt: 'SRT', vtt: 'VTT', ass: 'ASS/SSA', txt: 'Plain Text' };
+            exportFormats.forEach(fmt => {
+                const a = document.createElement('a');
+                a.href = `/api/download/${jobId}/${fmt}`;
+                a.innerHTML = `<span class="fmt-label">${fmtDescriptions[fmt] || fmt}</span>`;
+                a.download = '';
+                downloadButtons.appendChild(a);
+            });
+
+            // Set preview text
+            output.textContent = result.text;
+        }
+
+        function togglePreview() {
+            output.style.display = output.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function showError(msg) {
+            errorCard.style.display = 'block';
+            outputCard.style.display = 'none';
+            errorOutput.textContent = msg;
+        }
+
+        function resetUI() {
+            spinner.classList.remove('active');
+            transcribeBtn.disabled = !selectedFile;
+        }
+    </script>
+</body>
+</html>
