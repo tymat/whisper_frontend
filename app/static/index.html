@@ -338,11 +338,28 @@
             downloadButtons.innerHTML = '';
             const fmtDescriptions = { srt: 'SRT', vtt: 'VTT', ass: 'ASS/SSA', txt: 'Plain Text' };
             exportFormats.forEach(fmt => {
-                const a = document.createElement('a');
-                a.href = `/api/download/${jobId}/${fmt}`;
-                a.innerHTML = `<span class="fmt-label">${fmtDescriptions[fmt] || fmt}</span>`;
-                a.download = '';
-                downloadButtons.appendChild(a);
+                const btn = document.createElement('a');
+                btn.href = '#';
+                btn.innerHTML = `<span class="fmt-label">${fmtDescriptions[fmt] || fmt}</span>`;
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        const res = await fetch(`/api/download/${jobId}/${fmt}`);
+                        if (!res.ok) throw new Error('Download failed');
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const tmp = document.createElement('a');
+                        tmp.href = url;
+                        tmp.download = `${selectedFile.name.replace(/\.[^.]+$/, '')}.${fmt}`;
+                        document.body.appendChild(tmp);
+                        tmp.click();
+                        tmp.remove();
+                        URL.revokeObjectURL(url);
+                    } catch (err) {
+                        showError('Download failed: ' + err.message);
+                    }
+                });
+                downloadButtons.appendChild(btn);
             });
 
             // Set preview text
